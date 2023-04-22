@@ -1,0 +1,71 @@
+version: '3.9'
+
+services:
+
+  mongo:
+    image: mongo:6.0.5
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    ports:
+      - 27017:27017
+    volumes:
+      - db-data:/data/db
+      - db-log:/var/log
+    healthcheck:
+        test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/workScheduler --quiet
+        interval: 20s
+        timeout: 10s
+        retries: 5
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: build/scheduler/Dockerfile
+    ports:
+      - 8080:8080
+    environment:
+      MONGO_URI: mongodb://root:example@mongo:27017/
+      MONGO_DATABASE: workScheduler
+      MONGO_WORKS_COLLECTION: works
+    depends_on:
+      mongo:
+        condition: service_healthy
+    links:
+      - mongo
+
+  mongo_indexes:
+    build:
+      context: .
+      dockerfile: mongo_indexes/Dockerfile
+    environment:
+      MONGO_SCRIPTS_USER: root
+      MONGO_SCRIPTS_PASSWORD: example
+      MONGO_SCRIPTS_DATABASE: workScheduler
+      MONGO_SCRIPTS_HOST: mongo
+      MONGO_SCRIPTS_PORT: 27017
+    depends_on:
+      mongo:
+        condition: service_healthy
+    links:
+      - mongo
+
+  mongo-express:
+    image: mongo-express:1.0.0-alpha.4
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
+    depends_on:
+      mongo:
+        condition: service_healthy
+    links:
+      - mongo
+
+volumes:
+  db-data: {}
+  db-log: {}
